@@ -304,6 +304,28 @@ table.data td.actions { text-align: right; }
 /* QR preview box */
 .qr-box { display: grid; place-items: center; padding: var(--sp-4); background: #fff; border-radius: var(--radius-md); }
 
+/* Scan success card + animated tick */
+.scan-ok { display: grid; place-items: center; text-align: center; animation: pop var(--dur-base) var(--ease-out); }
+.scan-tick { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--status-present) 16%, transparent); color: var(--status-present);
+  margin-bottom: var(--sp-3); animation: tickPop var(--dur-slow) var(--ease-out); }
+.scan-tick [data-icon] svg { width: 30px; height: 30px; }
+@keyframes tickPop { from { opacity: 0; transform: scale(.4); } 60% { transform: scale(1.12); } }
+
+/* Inline notice (e.g. "No schedule assigned") */
+.notice { margin-top: var(--sp-4); padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border); }
+.notice--warn { background: color-mix(in srgb, var(--status-late) 14%, transparent); color: #b45309;
+  border-color: color-mix(in srgb, var(--status-late) 35%, transparent); }
+
+/* Global top progress bar (driven by App.ui.progress / api.js) */
+#app-progress { position: fixed; left: 0; top: 0; height: 3px; width: 100%; z-index: var(--z-progress);
+  transform: scaleX(0); transform-origin: left; opacity: 0;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-2));
+  transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+#app-progress.is-active { opacity: 1; animation: progressGrow 2.2s var(--ease-out) forwards; }
+@keyframes progressGrow { 0% { transform: scaleX(0); } 50% { transform: scaleX(.65); } 100% { transform: scaleX(.92); } }
+
 /* Helpers */
 .row { display: flex; gap: var(--sp-3); align-items: center; }
 .row--end { justify-content: flex-end; }
@@ -316,11 +338,46 @@ table.data td.actions { text-align: right; }
    ========================================================================= */
 @media (max-width: 860px) {
   #app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: fixed; left: 0; top: 0; z-index: var(--z-modal); width: var(--sidebar-w);
+  /* Drawer sits ABOVE its scrim (--z-drawer > --z-scrim) so nav links stay
+     tappable — previously both shared --z-modal and the scrim ate the taps. */
+  .sidebar { position: fixed; left: 0; top: 0; z-index: var(--z-drawer); width: var(--sidebar-w);
+    box-shadow: var(--shadow-3);
     transform: translateX(-100%); transition: transform var(--dur-base) var(--ease-out); }
   #app-shell.nav-open .sidebar { transform: translateX(0); }
-  .sidebar__scrim { position: fixed; inset: 0; background: rgba(2,6,23,.5); z-index: var(--z-modal); }
+  .sidebar__scrim { position: fixed; inset: 0; background: rgba(2,6,23,.5); z-index: var(--z-scrim); }
   .topbar__menu { display: inline-flex; }
+  /* Larger touch targets + roomier nav rows on phones */
+  .nav__link { padding: 13px 14px; }
+}
+
+/* =========================================================================
+   Mobile refinements: responsive tables, condensed topbar, sheet modals
+   ========================================================================= */
+@media (max-width: 640px) {
+  .view { padding: var(--sp-4); }
+  .page-head { align-items: flex-start; }
+
+  /* Condense the topbar so it never overflows on small screens */
+  .usermenu__name { display: none; }
+  .breadcrumbs { font-size: 13px; }
+
+  /* Form modals become bottom sheets; comfortable to reach with a thumb */
+  .modal-scrim { padding: 0; align-items: flex-end; }
+  .modal { max-width: 100%; max-height: 92vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+
+  /* Tables collapse into stacked cards — no horizontal scroll */
+  .table-wrap { overflow: visible; border: 0; background: transparent; }
+  table.data { min-width: 0; border-collapse: separate; border-spacing: 0; }
+  table.data thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.data tr { display: block; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-1); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3); }
+  table.data td { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3);
+    border: 0; padding: 8px 2px; white-space: normal; text-align: right; }
+  table.data td::before { content: attr(data-label); color: var(--text-muted); font-size: 12px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .04em; text-align: left; }
+  table.data td.actions { justify-content: flex-end; }
+  table.data td.actions::before { content: ""; }
+  table.data td:empty { display: none; }
 }
 
 /* =========================================================================

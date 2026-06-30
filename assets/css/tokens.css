@@ -45,7 +45,9 @@
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
 
   /* Z-index scale */
-  --z-base: 10; --z-dropdown: 20; --z-sticky: 30; --z-modal: 50; --z-toast: 60;
+  --z-base: 10; --z-dropdown: 20; --z-sticky: 30;
+  --z-scrim: 40; --z-drawer: 45;   /* mobile nav: drawer MUST sit above its scrim */
+  --z-modal: 50; --z-toast: 60; --z-progress: 70;
 
   /* Motion (design-engineering curves — stronger than CSS defaults) */
   --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);

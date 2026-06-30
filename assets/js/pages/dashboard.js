@@ -1,6 +1,6 @@
-/* ===== Dashboard: KPI cards + charts ===== */
+/* ===== Dashboard: KPI cards + charts, live-refreshing on new attendance ===== */
 (function () {
-  let charts = [];
+  let charts = [], unsub = null;
   const destroy = () => { charts.forEach((c) => c.destroy()); charts = []; };
 
   App.pages.dashboard = {
@@ -10,7 +10,10 @@
       view.innerHTML = `
         <div class="page-head">
           <div><h1>Dashboard</h1><p>Today at a glance — ${new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p></div>
-          <a class="btn btn--cta" href="#/scanner"><span data-icon="scan-line"></span> Scan attendance</a>
+          <div class="row">
+            <button class="btn" id="dash-manual"><span data-icon="clipboard-pen"></span> Manual entry</button>
+            <a class="btn btn--cta" href="#/scanner"><span data-icon="scan-line"></span> Scan attendance</a>
+          </div>
         </div>
         <div id="kpis">${App.ui.skeletonKpis()}</div>
         <div class="grid-2 mt-4">
@@ -21,13 +24,23 @@
         </div>`;
       App.ui.icons(view);
 
-      const data = await App.api.call("analytics.summary", {});
-      renderKpis(data.cards);
-      renderTrend(data.series);
-      renderDept(data.series);
-      App.ui.icons(view);
+      App.ui.$("#dash-manual").addEventListener("click", () => App.manualAttendance && App.manualAttendance());
+      await load();
+
+      // Live-refresh KPIs/charts whenever a scan or manual entry happens.
+      if (!unsub) unsub = App.bus.on("attendance:changed", () => { if (App.ui.$("#kpis")) load(); });
     },
+    onLeave() { destroy(); if (unsub) { unsub(); unsub = null; } },
   };
+
+  async function load() {
+    destroy();
+    const data = await App.api.call("analytics.summary", {}, { fresh: true });
+    renderKpis(data.cards);
+    renderTrend(data.series);
+    renderDept(data.series);
+    App.ui.icons(App.ui.$("#view"));
+  }
 
   function renderKpis(c) {
     const cards = [
@@ -45,9 +58,7 @@
       </div>`).join("")}</div>`;
   }
 
-  function gridColor() {
-    return getComputedStyle(document.documentElement).getPropertyValue("--border").trim() || "#E2E8F0";
-  }
+  const gridColor = () => getComputedStyle(document.documentElement).getPropertyValue("--border").trim() || "#E2E8F0";
 
   function renderTrend(s) {
     const host = App.ui.$("#c-trend"); host.innerHTML = `<canvas></canvas>`;

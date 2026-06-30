@@ -6,7 +6,7 @@
 window.APP_CONFIG = {
   // Paste your Apps Script Web App URL here, e.g.
   // "https://script.google.com/macros/s/XXXXXXXX/exec"
-  API_URL: "https://script.google.com/macros/s/AKfycbwqXv__GFLtUFQYHoWrRwEtCZ2xKp1BfcGG9V90BMmZjLPaxDuXzLU346AvRtxQWZxZSw/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbz4EWxbooajK3YVn8Azwu7gbHbWt-Y6sGMhdV48rjd2hsYWZTwb4Him_mH42Bq9oqHRWw/exec",
 
   ORG_NAME: "QR Attendance",
   THEME: "light",        // "light" | "dark"

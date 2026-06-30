@@ -1,8 +1,26 @@
 /* =========================================================================
-   utils.gs — shared helpers: sheets I/O, JSON output, hashing, ids, time.
+   utils.gs — shared helpers: sheets I/O, caching, JSON, hashing, ids, time.
+
+   Performance model
+   -----------------
+   • _memo        : request-scoped cache (one doPost = one read per sheet).
+                    MUST be reset at the start of every request — see
+                    resetRequestCache_() called from Code.gs doPost/doGet.
+   • CacheService : cross-request cache for small/stable sheets (~25s TTL).
+                    Skipped for Attendance (can exceed the 100KB value limit).
+   • Every write (append_/update_/deleteRow_) busts both layers for its sheet.
    ========================================================================= */
 
 const SS = () => SpreadsheetApp.getActiveSpreadsheet();
+
+// Sheets safe to cache across requests (small + read-heavy). Attendance is
+// intentionally excluded — it grows unbounded and is written constantly.
+var CACHEABLE_ = { Schedule: true, Settings: true, Admin: true, Members: true };
+var CACHE_TTL_ = 25;            // seconds
+var _memo = {};                 // sheetName -> rows (request scope)
+
+/** Reset the per-request memo. Call once at the top of every entry point. */
+function resetRequestCache_() { _memo = {}; }
 
 function sheet_(name) {
   const s = SS().getSheetByName(name);
@@ -10,7 +28,7 @@ function sheet_(name) {
   return s;
 }
 
-/** Read all rows of a sheet as objects keyed by the header row. */
+/** Raw read — always hits the spreadsheet. Prefer cachedReadAll_ in modules. */
 function readAll_(name) {
   const sh = sheet_(name);
   const values = sh.getDataRange().getValues();
@@ -23,11 +41,41 @@ function readAll_(name) {
   }).filter(function (o) { return String(o[headers[0]]).length > 0; });
 }
 
+/** Cached read: request memo first, then CacheService, then the sheet. */
+function cachedReadAll_(name) {
+  if (_memo[name]) return _memo[name];
+
+  if (CACHEABLE_[name]) {
+    try {
+      var hit = CacheService.getScriptCache().get('sheet:' + name);
+      if (hit) { var cached = JSON.parse(hit); _memo[name] = cached; return cached; }
+    } catch (e) { /* cache miss / parse error — fall through to live read */ }
+  }
+
+  var rows = readAll_(name);
+  _memo[name] = rows;
+
+  if (CACHEABLE_[name]) {
+    try {
+      var s = JSON.stringify(rows);
+      if (s.length < 90000) CacheService.getScriptCache().put('sheet:' + name, s, CACHE_TTL_);
+    } catch (e) { /* too big / quota — skip cross-request cache */ }
+  }
+  return rows;
+}
+
+/** Invalidate both cache layers for a sheet after a write. */
+function bustCache_(name) {
+  delete _memo[name];
+  try { CacheService.getScriptCache().remove('sheet:' + name); } catch (e) {}
+}
+
 /** Append an object as a new row, aligned to the header order. */
 function append_(name, obj) {
   const sh = sheet_(name);
   const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
   sh.appendRow(headers.map(function (h) { return sanitizeCell_(obj[h] !== undefined ? obj[h] : ''); }));
+  bustCache_(name);
   return obj;
 }
 
@@ -53,6 +101,7 @@ function update_(name, col, value, obj) {
   const current = sh.getRange(rowIdx, 1, 1, headers.length).getValues()[0];
   headers.forEach(function (h, i) { if (obj[h] !== undefined) current[i] = sanitizeCell_(obj[h]); });
   sh.getRange(rowIdx, 1, 1, headers.length).setValues([current]);
+  bustCache_(name);
   const out = {};
   headers.forEach(function (h, i) { out[h] = current[i]; });
   return out;
@@ -60,13 +109,22 @@ function update_(name, col, value, obj) {
 
 function deleteRow_(name, col, value) {
   const rowIdx = findRowIndex_(name, col, value);
-  if (rowIdx > 0) sheet_(name).deleteRow(rowIdx);
+  if (rowIdx > 0) { sheet_(name).deleteRow(rowIdx); bustCache_(name); }
 }
 
 /** Prevent CSV/formula injection when writing user input into cells. */
 function sanitizeCell_(v) {
   if (typeof v === 'string' && /^[=+\-@]/.test(v)) return "'" + v;
   return v;
+}
+
+/** Serialize the critical write path (scan/manual) to avoid double-records. */
+function withLock_(fn) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(8000); }
+  catch (e) { throw new Error('System busy — please scan again.'); }
+  try { return fn(); }
+  finally { try { lock.releaseLock(); } catch (e) {} }
 }
 
 function json_(obj) {
@@ -81,6 +139,12 @@ function nowISO_() {
 }
 function today_() { return Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd'); }
 function hhmm_() { return Utilities.formatDate(new Date(), tz_(), 'HH:mm'); }
+
+/** Normalize a sheet date value (Date object OR text) to a 'yyyy-MM-dd' string. */
+function dstr_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
+  return String(v == null ? '' : v).slice(0, 10);
+}
 function tz_() { return Settings_.get('Timezone') || Session.getScriptTimeZone() || 'Asia/Manila'; }
 
 /** Salted, iterated SHA-256 (poor-man's KDF; PBKDF2/scrypt = Enterprise upgrade). */
@@ -94,9 +158,18 @@ function hashPassword_(password, salt) {
 }
 function newSalt_() { return uuid_().replace(/-/g, ''); }
 
-function genId_(prefix, name, col) {
-  // simple incremental id like M001 / A0001 based on existing count
-  const count = readAll_(name).length + 1;
-  const width = prefix === 'A' ? 4 : 3;
-  return prefix + ('000000' + count).slice(-width);
+/**
+ * Collision-safe incremental id (e.g. M001 / A0001 / SC001).
+ * Uses max(existing numeric suffix) + 1 — survives deletions and, combined
+ * with withLock_ on the write path, concurrent scans.
+ */
+function genId_(prefix, name) {
+  var width = prefix === 'A' ? 4 : 3;
+  var idHeader = sheet_(name).getRange(1, 1, 1, 1).getValues()[0][0]; // first column = ID
+  var max = 0;
+  cachedReadAll_(name).forEach(function (r) {
+    var n = parseInt(String(r[idHeader] || '').replace(/\D+/g, ''), 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  return prefix + ('000000' + (max + 1)).slice(-width);
 }

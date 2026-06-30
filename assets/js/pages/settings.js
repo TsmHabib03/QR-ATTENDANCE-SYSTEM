@@ -29,12 +29,14 @@
         e.preventDefault();
         const data = Object.fromEntries(new FormData(form).entries());
         data.EmailEnabled = form.EmailEnabled.checked;
+        const btn = App.ui.$("#set-save"); App.ui.busy(btn, true);
         try {
           await App.api.call("settings.save", { settings: data });
           App.settings = { ...App.settings, ...data };
           App.applyBranding();
           App.ui.toast("Settings saved.");
         } catch (err) { App.ui.toast(err.message, "error"); }
+        finally { App.ui.busy(btn, false); }
       });
     },
   };

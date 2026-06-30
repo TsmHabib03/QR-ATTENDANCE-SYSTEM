@@ -81,6 +81,54 @@
   ui.initials = (name) =>
     (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
+  // ---- Timing ----
+  ui.debounce = (fn, ms = 250) => {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  };
+
+  // ---- Button busy state (disable + spinner; preserves the label) ----
+  ui.busy = (btn, on) => {
+    if (!btn) return;
+    if (on) {
+      btn.disabled = true;
+      if (!btn.querySelector(".spinner")) {
+        const sp = document.createElement("span");
+        sp.className = "spinner";
+        btn.appendChild(sp);
+      }
+      const label = btn.querySelector(".btn__label"); if (label) label.style.opacity = ".6";
+    } else {
+      btn.disabled = false;
+      const sp = btn.querySelector(".spinner"); if (sp && !sp.hasAttribute("data-keep")) sp.remove();
+      const label = btn.querySelector(".btn__label"); if (label) label.style.opacity = "";
+    }
+  };
+
+  // ---- Global top progress bar (driven by api.js around every request) ----
+  let pending = 0, bar;
+  ui.progress = (on) => {
+    if (!bar) {
+      bar = ui.el("div", { id: "app-progress" });
+      document.body.appendChild(bar);
+    }
+    pending = Math.max(0, pending + (on ? 1 : -1));
+    if (pending > 0) { bar.classList.add("is-active"); }
+    else { bar.classList.remove("is-active"); }
+  };
+
+  // ---- Shared form-field builders (used by every page form) ----
+  ui.input = (name, label, val = "", { req = false, type = "text", attrs = "" } = {}) =>
+    `<div class="field"><label class="field__label" for="f-${name}">${ui.esc(label)}${req ? " *" : ""}</label>
+     <input class="input" id="f-${name}" name="${name}" type="${type}" value="${ui.esc(val)}" ${req ? "required" : ""} ${attrs} /></div>`;
+  ui.select = (name, label, val, opts) =>
+    `<div class="field"><label class="field__label" for="f-${name}">${ui.esc(label)}</label>
+     <select class="input" id="f-${name}" name="${name}">${opts.map((o) => {
+       const value = typeof o === "object" ? o.value : o;
+       const text = typeof o === "object" ? o.label : (o || "—");
+       return `<option value="${ui.esc(value)}" ${String(value) === String(val ?? "") ? "selected" : ""}>${ui.esc(text)}</option>`;
+     }).join("")}</select></div>`;
+
   // ---- Modal ----
   ui.modal = ({ title, body, footer }) => {
     const scrim = ui.el("div", { class: "modal-scrim" });
@@ -163,7 +211,7 @@
               ${ui.esc(c.label)} ${c.sortable === false ? "" : `<span class="sort">${arrow}</span>`}</th>`;
           }).join("")}</tr></thead>
           <tbody>${slice.map((row) => `<tr>${columns.map((c) =>
-            `<td class="${c.className || ""}">${c.render ? c.render(row) : ui.esc(row[c.key])}</td>`).join("")}</tr>`).join("")}</tbody>
+            `<td class="${c.className || ""}" data-label="${ui.esc(c.label || "")}">${c.render ? c.render(row) : ui.esc(row[c.key])}</td>`).join("")}</tr>`).join("")}</tbody>
         </table>`;
 
       pager.innerHTML = `

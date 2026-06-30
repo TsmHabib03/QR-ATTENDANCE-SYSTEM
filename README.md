@@ -38,6 +38,11 @@ Sign in with **any username/password** — demo data is generated in memory.
    repo's `scripts/` folder (or use **clasp**, below).
 3. Run the **`setup()`** function once (authorize when prompted). This creates
    every tab and a default admin: **`admin` / `admin123`** — change it after first login.
+   `setup()` is **idempotent and non-destructive**: re-running it only ensures the
+   header rows and seeds, so it doubles as a **schema migration**. If you are
+   upgrading an existing sheet, re-run `setup()` to add the expanded **Schedule**
+   columns and the new **`Members.ScheduleID`** column (existing data is preserved;
+   `ScheduleID` is appended at the end and starts blank).
 4. **Deploy → New deployment → Web app**
    - *Execute as:* **Me**
    - *Who has access:* **Anyone**
@@ -110,19 +115,39 @@ assets/
   css/  tokens.css          design tokens (colors, spacing, motion)
         app.css             components & layout
   js/   config.js           ← per-client settings (API_URL, branding)
-        api.js              CORS-safe fetch wrapper (+ demo routing)
-        mock.js             in-memory demo backend
-        ui.js               DOM/toast/table/modal helpers
+        api.js              CORS-safe fetch wrapper (+ read cache, progress, demo routing)
+        mock.js             in-memory demo backend (mirrors every action)
+        bus.js              tiny pub/sub (live dashboard refresh on new attendance)
+        ui.js               DOM/toast/table/modal + debounce/busy/progress helpers
         auth.js             token storage + login/logout
         router.js           hash router
         app.js              bootstrap (theme, topbar, auth gate)
-        pages/*.js          dashboard, members, scanner, attendance, analytics, reports, settings
+        pages/*.js          dashboard, members, schedule, scanner, attendance, analytics, reports, audit, settings
 scripts/                    Google Apps Script backend (deploy separately)
   Code.gs                   doPost/doGet router + setup()/installTriggers()
   auth · members · attendance · schedule · analytics · reports · email · audit · settings · utils
   appsscript.json
 vercel.json · .github/workflows/deploy.yml · .clasp.json.example
 ```
+
+---
+
+## 5b. Schedules drive attendance validation
+
+Attendance status is **never** computed from a hardcoded time. Each scan resolves
+the member's schedule and classifies the record from it:
+
+- **Resolution priority:** the member's directly assigned schedule → `Employee` →
+  `Position` → `Section` → `Department` → `Default` scope. If nothing matches, the
+  scan is still recorded as **Present** with a *"No schedule assigned"* note — it is
+  **never auto-marked Absent**.
+- **Rules per schedule:** `Late` after *Late after* (or *Start + Grace*), `Half Day`
+  after *Half-day after*, `Holiday` on non-working days, with *Earliest time in* /
+  *Latest time out* bounding the worked-hours calculation.
+
+Create and assign schedules on the **Schedules** page; assign one to a member via the
+**Assigned schedule** dropdown on the Members form. The scan write path is serialized
+with `LockService` so rapid or duplicate scans can't create double records.
 
 ---
 
@@ -144,7 +169,7 @@ to `application/json` or add an `Authorization` header, or browsers will block i
 
 - Passwords: per-user salt + iterated SHA-256. Change the default admin password.
 - Sessions: opaque tokens in the `Sessions` sheet, 12h sliding expiry, deleted on logout.
-- QR codes encode the **Member ID only** — never personal data.
+- QR codes encode an **opaque member code** (the Member ID, or a regenerated token) — never personal data.
 - User input is sanitized before writing to Sheets (formula-injection guard).
 - Deploy the Web App as **Anyone**, but every non-login action requires a valid token.
 

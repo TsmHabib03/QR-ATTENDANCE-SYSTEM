@@ -6,12 +6,14 @@
    ========================================================================= */
 
 function doPost(e) {
+  resetRequestCache_();                 // fresh read cache per request
   var body = {};
   try { body = JSON.parse(e.postData.contents); } catch (err) {}
   return route_(body.action, body.token, body.payload || {}, e);
 }
 
 function doGet(e) {
+  resetRequestCache_();
   // health check / simple readiness probe
   return json_({ ok: true, result: { status: 'alive', time: nowISO_() } });
 }
@@ -35,11 +37,15 @@ function route_(action, token, payload, e) {
       'members.importCsv':   function () { return Members_.importCsv(payload, session); },
 
       'attendance.scan':     function () { return Attendance_.scan(payload, session); },
+      'attendance.manual':   function () { return Attendance_.manual(payload, session); },
       'attendance.list':     function () { return Attendance_.list(payload); },
       'attendance.update':   function () { return Attendance_.update(payload, session); },
+      'attendance.delete':   function () { return Attendance_.remove(payload, session); },
 
       'schedule.list':       function () { return Schedule_.list(payload); },
       'schedule.save':       function () { return Schedule_.save(payload, session); },
+      'schedule.delete':     function () { return Schedule_.remove(payload, session); },
+      'schedule.toggle':     function () { return Schedule_.toggle(payload, session); },
 
       'analytics.summary':   function () { return Analytics_.summary(payload); },
       'reports.generate':    function () { return Reports_.generate(payload, session); },
@@ -60,96 +66,68 @@ function route_(action, token, payload, e) {
 }
 
 /* -------------------------------------------------------------------------
-   ONE-TIME SETUP — run once from the Apps Script editor.
-   Creates all sheets with headers and a default admin (admin / admin123).
-   CHANGE THE DEFAULT PASSWORD IMMEDIATELY after first login.
-   IMPORTANT: Make sure a Google Sheet named "QR Attendance" is open!
+   ONE-TIME / RE-RUNNABLE SETUP — run once from the Apps Script editor.
+   Idempotent & non-destructive: ensures every sheet + header exists WITHOUT
+   wiping existing data rows, so it doubles as a schema migration. Seeds the
+   default admin (admin / admin123), settings, and a default schedule only
+   when they are missing. CHANGE THE DEFAULT PASSWORD after first login.
    ------------------------------------------------------------------------- */
 function setup() {
   try {
+    resetRequestCache_();
     var ss = SS();
-    Logger.log('📄 Starting setup for: ' + ss.getName());
+    Logger.log('Setup for: ' + ss.getName());
 
     var schema = {
       Admin:     ['AdminID','Username','PasswordHash','PasswordSalt','FullName','Email','Role','Status','CreatedAt'],
-      Members:   ['MemberID','EmployeeID','FirstName','MiddleName','LastName','Gender','Birthdate','Department','Course','Section','Position','Contact','Email','Address','QRCode','PhotoFileId','Status','CreatedAt','UpdatedAt'],
+      Members:   ['MemberID','EmployeeID','FirstName','MiddleName','LastName','Gender','Birthdate','Department','Course','Section','Position','Contact','Email','Address','QRCode','PhotoFileId','Status','CreatedAt','UpdatedAt','ScheduleID'],
       Attendance:['AttendanceID','MemberID','Name','Department','Date','TimeIn','TimeOut','BreakOut','BreakIn','WorkingHours','LateMinutes','Status','Remarks','RecordedBy','CreatedAt','UpdatedAt'],
-      Schedule:  ['ScheduleID','ScopeType','ScopeValue','StartTime','EndTime','GracePeriod','LateThreshold'],
+      Schedule:  ['ScheduleID','ScheduleName','ScopeType','ScopeValue','StartTime','EndTime','GracePeriod','LateAfter','HalfDayAfter','EarliestTimeIn','LatestTimeOut','WorkingDays','Status','CreatedAt','UpdatedAt'],
       Sessions:  ['Token','AdminID','CreatedAt','ExpiresAt','UserAgent'],
       AuditLogs: ['LogID','User','Action','Description','Browser','IP','Timestamp'],
       Settings:  ['Key','Value']
     };
 
-    // Step 1: Create all sheets with headers
-    Logger.log('✏️ Creating sheets...');
+    // Ensure sheets + header rows (row 1 only) — data rows are preserved.
     Object.keys(schema).forEach(function (name) {
-      var sh = ss.getSheetByName(name);
-      if (sh) {
-        Logger.log('  • ' + name + ' (already exists, clearing...)');
-        sh.clear();
-      } else {
-        sh = ss.insertSheet(name);
-        Logger.log('  • ' + name + ' (created)');
-      }
-      // Add headers
+      var sh = ss.getSheetByName(name) || ss.insertSheet(name);
       sh.getRange(1, 1, 1, schema[name].length).setValues([schema[name]]).setFontWeight('bold');
       sh.setFrozenRows(1);
+      Logger.log('  • ' + name + ' ready');
     });
 
-    // Step 2: Add default settings (directly to Settings sheet)
-    Logger.log('⚙️ Adding default settings...');
-    var settingsSheet = ss.getSheetByName('Settings');
-    var defaults = {
-      OrgName: 'QR Attendance',
-      Timezone: 'Asia/Manila',
-      GracePeriod: '10',
-      WorkingDays: 'Mon-Fri',
-      EmailEnabled: 'true',
-      Theme: 'light'
-    };
-    Object.keys(defaults).forEach(function (k) {
-      settingsSheet.appendRow([k, defaults[k]]);
-    });
+    // Default settings — add only missing keys (never clobber customizations).
+    var defaults = { OrgName: 'QR Attendance', Timezone: 'Asia/Manila', GracePeriod: '10',
+                     WorkingDays: 'Mon-Fri', EmailEnabled: 'true', Theme: 'light' };
+    var have = {};
+    readAll_('Settings').forEach(function (r) { have[r.Key] = true; });
+    var setSheet = ss.getSheetByName('Settings');
+    Object.keys(defaults).forEach(function (k) { if (!have[k]) setSheet.appendRow([k, defaults[k]]); });
 
-    // Step 3: Add default admin (directly to Admin sheet)
-    Logger.log('👤 Adding default admin...');
-    var adminSheet = ss.getSheetByName('Admin');
-    var salt = newSalt_();
-    var adminHash = hashPassword_('admin123', salt);
-    adminSheet.appendRow([
-      'AD001',           // AdminID
-      'admin',           // Username
-      adminHash,         // PasswordHash
-      salt,              // PasswordSalt
-      'Administrator',   // FullName
-      '',                // Email
-      'Administrator',   // Role
-      'Active',          // Status
-      nowISO_()          // CreatedAt
-    ]);
+    // Default admin — only if none exists.
+    if (readAll_('Admin').length === 0) {
+      var salt = newSalt_();
+      ss.getSheetByName('Admin').appendRow([
+        'AD001', 'admin', hashPassword_('admin123', salt), salt,
+        'Administrator', '', 'Administrator', 'Active', nowISO_()
+      ]);
+      Logger.log('  • default admin created (admin / admin123)');
+    }
 
-    // Step 4: Add default schedule (directly to Schedule sheet)
-    Logger.log('📅 Adding default schedule...');
-    var scheduleSheet = ss.getSheetByName('Schedule');
-    scheduleSheet.appendRow([
-      'SC001',      // ScheduleID
-      'Default',    // ScopeType
-      '*',          // ScopeValue
-      '08:00',      // StartTime
-      '17:00',      // EndTime
-      10,           // GracePeriod
-      '08:10'       // LateThreshold
-    ]);
+    // Default schedule — only if none exists.
+    if (readAll_('Schedule').length === 0) {
+      ss.getSheetByName('Schedule').appendRow([
+        'SC001', 'Standard 8–5', 'Default', '*', '08:00', '17:00', 10,
+        '08:10', '12:00', '06:00', '19:00', 'Mon-Fri', 'Active', nowISO_(), nowISO_()
+      ]);
+      Logger.log('  • default schedule created (SC001)');
+    }
 
     SpreadsheetApp.flush();
-    Logger.log('✅ Setup complete! You can now log in with:');
-    Logger.log('   Username: admin');
-    Logger.log('   Password: admin123');
-    Logger.log('⚠️  CHANGE THE PASSWORD IMMEDIATELY AFTER LOGIN!');
-
+    Logger.log('✅ Setup complete. Log in with admin / admin123 and change the password.');
   } catch (err) {
-    Logger.log('❌ ERROR: ' + err);
-    Logger.log('   Make sure your Google Sheet is open in another tab!');
+    Logger.log('❌ Setup error: ' + err + ' — make sure a Google Sheet is open.');
+    throw err;
   }
 }
 

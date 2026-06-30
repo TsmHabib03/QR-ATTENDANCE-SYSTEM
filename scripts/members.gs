@@ -4,7 +4,7 @@
 var Members_ = (function () {
 
   function list(payload) {
-    var rows = readAll_('Members');
+    var rows = cachedReadAll_('Members');
     var q = String((payload && payload.search) || '').toLowerCase();
     if (q) {
       rows = rows.filter(function (m) {

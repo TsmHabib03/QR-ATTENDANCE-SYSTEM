@@ -5,7 +5,7 @@ var Settings_ = (function () {
 
   function all() {
     var o = {};
-    readAll_('Settings').forEach(function (r) { o[r.Key] = r.Value; });
+    cachedReadAll_('Settings').forEach(function (r) { o[r.Key] = r.Value; });
     // normalize types the frontend expects
     if (o.EmailEnabled !== undefined) o.EmailEnabled = (String(o.EmailEnabled) === 'true');
     if (o.GracePeriod !== undefined) o.GracePeriod = Number(o.GracePeriod);
@@ -13,7 +13,7 @@ var Settings_ = (function () {
   }
 
   function get(key) {
-    var r = readAll_('Settings').filter(function (x) { return x.Key === key; })[0];
+    var r = cachedReadAll_('Settings').filter(function (x) { return x.Key === key; })[0];
     return r ? r.Value : '';
   }
 

@@ -9,7 +9,7 @@ var Auth_ = (function () {
     var password = String(payload.password || '');
     if (!username || !password) throw new Error('Username and password are required.');
 
-    var admin = readAll_('Admin').filter(function (a) {
+    var admin = cachedReadAll_('Admin').filter(function (a) {
       return String(a.Username).toLowerCase() === username.toLowerCase() && a.Status === 'Active';
     })[0];
 
@@ -37,7 +37,7 @@ var Auth_ = (function () {
 
   function validate(token) {
     if (!token) throw new Error('Unauthorized — no session token.');
-    var rows = readAll_('Sessions');
+    var rows = cachedReadAll_('Sessions');
     var s = rows.filter(function (r) { return r.Token === token; })[0];
     if (!s) throw new Error('Session invalid — please sign in again.');
     if (new Date(s.ExpiresAt) < new Date()) {
@@ -47,14 +47,22 @@ var Auth_ = (function () {
     // sliding expiry
     var expires = new Date(Date.now() + SESSION_HOURS * 3600 * 1000);
     update_('Sessions', 'Token', token, { ExpiresAt: Utilities.formatDate(expires, tz_(), "yyyy-MM-dd'T'HH:mm:ss") });
-    var admin = readAll_('Admin').filter(function (a) { return a.AdminID === s.AdminID; })[0] || {};
+    var admin = cachedReadAll_('Admin').filter(function (a) { return a.AdminID === s.AdminID; })[0] || {};
     return { adminId: s.AdminID, username: admin.Username, name: admin.FullName || admin.Username };
   }
 
-  function logout(token) { deleteRow_('Sessions', 'Token', token); return {}; }
+  function logout(token) {
+    var s = cachedReadAll_('Sessions').filter(function (r) { return r.Token === token; })[0];
+    if (s) {
+      var admin = cachedReadAll_('Admin').filter(function (a) { return a.AdminID === s.AdminID; })[0];
+      Audit_.log('Logout', admin ? admin.Username : 'unknown', 'Signed out');
+    }
+    deleteRow_('Sessions', 'Token', token);
+    return {};
+  }
 
   function changePassword(session, payload) {
-    var admin = readAll_('Admin').filter(function (a) { return a.AdminID === session.adminId; })[0];
+    var admin = cachedReadAll_('Admin').filter(function (a) { return a.AdminID === session.adminId; })[0];
     if (!admin) throw new Error('Account not found.');
     if (hashPassword_(String(payload.old || ''), admin.PasswordSalt) !== admin.PasswordHash)
       throw new Error('Current password is incorrect.');

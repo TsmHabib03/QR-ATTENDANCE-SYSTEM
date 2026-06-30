@@ -14,7 +14,7 @@ var Audit_ = (function () {
   }
 
   function list(payload) {
-    var rows = readAll_('AuditLogs');
+    var rows = cachedReadAll_('AuditLogs');
     if (payload && payload.action) rows = rows.filter(function (r) { return r.Action === payload.action; });
     rows.sort(function (a, b) { return new Date(b.Timestamp) - new Date(a.Timestamp); });
     return { rows: rows.slice(0, (payload && payload.limit) || 200), total: rows.length };

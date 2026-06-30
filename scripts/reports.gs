@@ -11,7 +11,7 @@ var Reports_ = (function () {
   }
 
   function rowsFor_(type) {
-    var att = readAll_('Attendance');
+    var att = cachedReadAll_('Attendance');
     var date = today_();
     switch (type) {
       case 'late':    return att.filter(function (a) { return a.Status === 'Late'; });
