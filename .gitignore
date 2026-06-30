@@ -1,0 +1,14 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# clasp (Apps Script CLI) — keep the example, ignore the real one
+.clasp.json
+.clasprc.json
+
+# node (only if you later add the optional Vite build)
+node_modules/
+dist/
+*.log
