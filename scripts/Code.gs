@@ -63,44 +63,94 @@ function route_(action, token, payload, e) {
    ONE-TIME SETUP — run once from the Apps Script editor.
    Creates all sheets with headers and a default admin (admin / admin123).
    CHANGE THE DEFAULT PASSWORD IMMEDIATELY after first login.
+   IMPORTANT: Make sure a Google Sheet named "QR Attendance" is open!
    ------------------------------------------------------------------------- */
 function setup() {
-  var schema = {
-    Admin:     ['AdminID','Username','PasswordHash','PasswordSalt','FullName','Email','Role','Status','CreatedAt'],
-    Members:   ['MemberID','EmployeeID','FirstName','MiddleName','LastName','Gender','Birthdate','Department','Course','Section','Position','Contact','Email','Address','QRCode','PhotoFileId','Status','CreatedAt','UpdatedAt'],
-    Attendance:['AttendanceID','MemberID','Name','Department','Date','TimeIn','TimeOut','BreakOut','BreakIn','WorkingHours','LateMinutes','Status','Remarks','RecordedBy','CreatedAt','UpdatedAt'],
-    Schedule:  ['ScheduleID','ScopeType','ScopeValue','StartTime','EndTime','GracePeriod','LateThreshold'],
-    Sessions:  ['Token','AdminID','CreatedAt','ExpiresAt','UserAgent'],
-    AuditLogs: ['LogID','User','Action','Description','Browser','IP','Timestamp'],
-    Settings:  ['Key','Value']
-  };
+  try {
+    var ss = SS();
+    Logger.log('📄 Starting setup for: ' + ss.getName());
 
-  var ss = SS();
-  Object.keys(schema).forEach(function (name) {
-    var sh = ss.getSheetByName(name) || ss.insertSheet(name);
-    sh.clear();
-    sh.getRange(1, 1, 1, schema[name].length).setValues([schema[name]]).setFontWeight('bold');
-    sh.setFrozenRows(1);
-  });
+    var schema = {
+      Admin:     ['AdminID','Username','PasswordHash','PasswordSalt','FullName','Email','Role','Status','CreatedAt'],
+      Members:   ['MemberID','EmployeeID','FirstName','MiddleName','LastName','Gender','Birthdate','Department','Course','Section','Position','Contact','Email','Address','QRCode','PhotoFileId','Status','CreatedAt','UpdatedAt'],
+      Attendance:['AttendanceID','MemberID','Name','Department','Date','TimeIn','TimeOut','BreakOut','BreakIn','WorkingHours','LateMinutes','Status','Remarks','RecordedBy','CreatedAt','UpdatedAt'],
+      Schedule:  ['ScheduleID','ScopeType','ScopeValue','StartTime','EndTime','GracePeriod','LateThreshold'],
+      Sessions:  ['Token','AdminID','CreatedAt','ExpiresAt','UserAgent'],
+      AuditLogs: ['LogID','User','Action','Description','Browser','IP','Timestamp'],
+      Settings:  ['Key','Value']
+    };
 
-  // default settings
-  var defaults = { OrgName: 'QR Attendance', Timezone: 'Asia/Manila', GracePeriod: '10',
-                   WorkingDays: 'Mon-Fri', EmailEnabled: 'true', Theme: 'light' };
-  Object.keys(defaults).forEach(function (k) { Settings_.set(k, defaults[k]); });
+    // Step 1: Create all sheets with headers
+    Logger.log('✏️ Creating sheets...');
+    Object.keys(schema).forEach(function (name) {
+      var sh = ss.getSheetByName(name);
+      if (sh) {
+        Logger.log('  • ' + name + ' (already exists, clearing...)');
+        sh.clear();
+      } else {
+        sh = ss.insertSheet(name);
+        Logger.log('  • ' + name + ' (created)');
+      }
+      // Add headers
+      sh.getRange(1, 1, 1, schema[name].length).setValues([schema[name]]).setFontWeight('bold');
+      sh.setFrozenRows(1);
+    });
 
-  // default admin
-  var salt = newSalt_();
-  append_('Admin', {
-    AdminID: 'AD001', Username: 'admin', PasswordHash: hashPassword_('admin123', salt),
-    PasswordSalt: salt, FullName: 'Administrator', Email: '', Role: 'Administrator',
-    Status: 'Active', CreatedAt: nowISO_()
-  });
+    // Step 2: Add default settings (directly to Settings sheet)
+    Logger.log('⚙️ Adding default settings...');
+    var settingsSheet = ss.getSheetByName('Settings');
+    var defaults = {
+      OrgName: 'QR Attendance',
+      Timezone: 'Asia/Manila',
+      GracePeriod: '10',
+      WorkingDays: 'Mon-Fri',
+      EmailEnabled: 'true',
+      Theme: 'light'
+    };
+    Object.keys(defaults).forEach(function (k) {
+      settingsSheet.appendRow([k, defaults[k]]);
+    });
 
-  // default schedule
-  append_('Schedule', { ScheduleID: 'SC001', ScopeType: 'Default', ScopeValue: '*',
-    StartTime: '08:00', EndTime: '17:00', GracePeriod: 10, LateThreshold: '08:10' });
+    // Step 3: Add default admin (directly to Admin sheet)
+    Logger.log('👤 Adding default admin...');
+    var adminSheet = ss.getSheetByName('Admin');
+    var salt = newSalt_();
+    var adminHash = hashPassword_('admin123', salt);
+    adminSheet.appendRow([
+      'AD001',           // AdminID
+      'admin',           // Username
+      adminHash,         // PasswordHash
+      salt,              // PasswordSalt
+      'Administrator',   // FullName
+      '',                // Email
+      'Administrator',   // Role
+      'Active',          // Status
+      nowISO_()          // CreatedAt
+    ]);
 
-  SpreadsheetApp.getUi && SpreadsheetApp.flush();
+    // Step 4: Add default schedule (directly to Schedule sheet)
+    Logger.log('📅 Adding default schedule...');
+    var scheduleSheet = ss.getSheetByName('Schedule');
+    scheduleSheet.appendRow([
+      'SC001',      // ScheduleID
+      'Default',    // ScopeType
+      '*',          // ScopeValue
+      '08:00',      // StartTime
+      '17:00',      // EndTime
+      10,           // GracePeriod
+      '08:10'       // LateThreshold
+    ]);
+
+    SpreadsheetApp.flush();
+    Logger.log('✅ Setup complete! You can now log in with:');
+    Logger.log('   Username: admin');
+    Logger.log('   Password: admin123');
+    Logger.log('⚠️  CHANGE THE PASSWORD IMMEDIATELY AFTER LOGIN!');
+
+  } catch (err) {
+    Logger.log('❌ ERROR: ' + err);
+    Logger.log('   Make sure your Google Sheet is open in another tab!');
+  }
 }
 
 /** Install daily/monthly email triggers (run once if email is desired). */
