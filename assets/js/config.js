@@ -6,14 +6,14 @@
 window.APP_CONFIG = {
   // Paste your Apps Script Web App URL here, e.g.
   // "https://script.google.com/macros/s/XXXXXXXX/exec"
-  API_URL: "https://script.google.com/macros/s/AKfycbzlSxIEDYrfgmTv7WGMNsBurh1U9BWdELZya-rLW4IcXfD10FVUJuxFAypvwENSXUX1iw/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbwACsOF-DNRvrH6jFc77Wd7U0UcdGjGl1yr5r847NV5Nlh61LJ330mHVaMQpBjAyjtq_A/exec",
 
   ORG_NAME: "QR Attendance",
   THEME: "light",        // "light" | "dark"
   TIMEZONE: "Asia/Manila"
 };
 
-// Global app namespace (classic scripts attach here — no bundler needed).
+// Global app namespace (classic scripts attach here — no bundler needed).a
 window.App = window.App || {};
 App.config = window.APP_CONFIG;
 App.isDemo = !App.config.API_URL;
