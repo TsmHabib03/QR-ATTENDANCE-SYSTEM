@@ -109,7 +109,10 @@
       App.sound.fail();
       if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
     } finally {
-      setTimeout(() => { busy = false; }, 800); // cooldown before the next member
+      // UX debounce only — withLock_ (utils.gs) is the real dedupe guard. Must stay
+      // above one decode-loop frame (~66ms @ fps:15) and long enough for a badge to
+      // clear the camera frame, since scan() toggles Time-In->Time-Out on re-reads.
+      setTimeout(() => { busy = false; }, 500);
     }
   }
 
@@ -127,13 +130,19 @@
     const el = popupNode();
     const card = el.querySelector(".scan-popup__card");
     if (r) {
-      const name = ((r.member.FirstName || "") + " " + (r.member.LastName || "")).trim();
+      const m = r.member;
+      const name = ((m.FirstName || "") + " " + (m.LastName || "")).trim();
+      const face = App.ui.avatarFace(m.Gender, m.MemberID);
+      const now = new Date();
       card.className = "scan-popup__card";
       card.innerHTML = `
-        <div class="scan-tick"><span data-icon="check"></span></div>
-        <div class="avatar-lg">${App.ui.initials(name)}</div>
+        <div class="scan-avatar" style="--ring-color: var(--status-present); --face-color: var(${face.colorVar})">
+          <div class="avatar-face">${face.svg}</div>
+          <span class="scan-avatar__badge"><span data-icon="check"></span></span>
+        </div>
         <h2>${App.ui.esc(name)}</h2>
-        <p class="mt-4">${App.ui.statusBadge(r.status)} &nbsp; <strong>${App.ui.esc(r.type)}</strong></p>`;
+        <p class="mt-4">${App.ui.statusBadge(r.status)} &nbsp; <strong>${App.ui.esc(r.type)}</strong></p>
+        <p class="scan-time"><span data-icon="clock"></span>${now.toLocaleTimeString()} <span class="scan-time__date">· ${now.toLocaleDateString()}</span></p>`;
     } else {
       card.className = "scan-popup__card is-fail";
       card.innerHTML = `
@@ -155,14 +164,16 @@
   function showResult(r) {
     const m = r.member, host = App.ui.$("#scan-result"); if (!host) return;
     const name = ((m.FirstName || "") + " " + (m.LastName || "")).trim();
+    const face = App.ui.avatarFace(m.Gender, m.MemberID);
+    const now = new Date();
     host.innerHTML = `
       <div class="scan-ok">
         <div class="scan-tick"><span data-icon="check"></span></div>
-        <div class="avatar-lg">${App.ui.initials(name)}</div>
+        <div class="avatar-face" style="--face-color: var(${face.colorVar})">${face.svg}</div>
         <h2>${App.ui.esc(name)}</h2>
         <p class="muted">${App.ui.esc(m.Department || "")} · ${App.ui.esc(m.MemberID)}</p>
         <p class="mt-4">${App.ui.statusBadge(r.status)} &nbsp; <strong>${App.ui.esc(r.type)}</strong></p>
-        <p class="muted">${new Date().toLocaleTimeString()} · ${new Date().toLocaleDateString()}</p>
+        <p class="scan-time"><span data-icon="clock"></span>${now.toLocaleTimeString()} <span class="scan-time__date">· ${now.toLocaleDateString()}</span></p>
         ${r.noSchedule ? `<p class="notice notice--warn">No schedule assigned — recorded without late/absent rules.</p>` : ""}
       </div>`;
     App.ui.icons(host);

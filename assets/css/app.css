@@ -296,9 +296,14 @@ table.data td.actions { text-align: right; }
 @media (max-width: 900px) { .scanner-grid { grid-template-columns: 1fr; } }
 #qr-reader { border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); }
 .scan-result { display: grid; place-items: center; text-align: center; min-height: 280px; }
-.scan-result .avatar-lg { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 30px; font-weight: 700; background: var(--color-primary); color: var(--color-primary-ink); margin-bottom: var(--sp-3);
-  animation: pop var(--dur-base) var(--ease-out); }
+/* Face avatar — bespoke inline-SVG face (App.ui.avatarFace), tinted via --face-color
+   set inline per member. Generic (not scoped to #scan-result) so it works identically
+   in the popup card, which lives outside that container. */
+.avatar-face { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--face-color, var(--color-primary)) 16%, transparent);
+  color: var(--face-color, var(--color-primary));
+  margin: 0 auto var(--sp-3); animation: pop var(--dur-base) var(--ease-out); }
+.avatar-face svg { width: 46px; height: 46px; }
 @keyframes pop { from { opacity: 0; transform: scale(.9); } }
 
 /* QR preview box */
@@ -312,16 +317,31 @@ table.data td.actions { text-align: right; }
 .scan-tick [data-icon] svg { width: 30px; height: 30px; }
 @keyframes tickPop { from { opacity: 0; transform: scale(.4); } 60% { transform: scale(1.12); } }
 
+/* Highlighted scan timestamp: tinted pill, larger + tabular-nums so digits don't
+   jitter between scans. No dedicated animation — it fades in as part of whichever
+   parent entrance is already running, since this renders on every scan and
+   shouldn't add its own attention-grabbing motion. */
+.scan-time { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--sp-3);
+  padding: 7px 14px; border-radius: var(--radius-pill); background: var(--surface-2);
+  border: 1px solid var(--border); font-size: 16px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums; }
+.scan-time [data-icon] { display: inline-grid; color: var(--color-primary); }
+.scan-time [data-icon] svg { width: 16px; height: 16px; }
+.scan-time__date { color: var(--text-muted); font-weight: 600; font-size: 13px; margin-left: 2px; }
+
 /* Inline notice (e.g. "No schedule assigned") */
 .notice { margin-top: var(--sp-4); padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
   border: 1px solid var(--border); }
 .notice--warn { background: color-mix(in srgb, var(--status-late) 14%, transparent); color: #b45309;
   border-color: color-mix(in srgb, var(--status-late) 35%, transparent); }
 
-/* Transient scan-result popup — reused node, no scrim, never blocks the camera/clicks */
+/* Transient scan-result popup — reused node, no scrim, never blocks the camera/clicks.
+   Card has no interactive children, so it stays pointer-events:none like its wrapper —
+   otherwise the invisible faded-out card would keep intercepting clicks in the middle
+   of the screen forever after the very first scan. */
 .scan-popup { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center;
   padding: var(--sp-4); pointer-events: none; }
-.scan-popup__card { pointer-events: auto; width: 100%; max-width: 360px; text-align: center;
+.scan-popup__card { width: 100%; max-width: 360px; text-align: center;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-3); padding: var(--sp-6) var(--sp-5);
   transform-origin: center; opacity: 0; transform: scale(.95);
@@ -329,6 +349,21 @@ table.data td.actions { text-align: right; }
 .scan-popup.is-visible .scan-popup__card { opacity: 1; transform: scale(1); }
 .scan-popup.is-leaving .scan-popup__card { transition-duration: 150ms; opacity: 0; transform: scale(.95); }
 .scan-popup__card.is-fail .scan-tick { background: color-mix(in srgb, var(--status-absent) 16%, transparent); color: var(--status-absent); }
+
+/* Popup-only avatar composition: colored ring + overlapping "verified badge"-style
+   corner icon, instead of the inline card's simpler stacked-badge-above-avatar
+   layout. Same avatar-face concept, different composition — this is what makes the
+   transient popup and the persistent "Last scan" card read as visually distinct. */
+.scan-avatar { position: relative; display: inline-grid; margin: 0 auto var(--sp-3); }
+.scan-avatar .avatar-face { margin: 0; }
+.scan-avatar::before { content: ""; position: absolute; inset: -5px; border-radius: 50%;
+  border: 3px solid var(--ring-color, var(--status-present)); }
+.scan-avatar__badge { position: absolute; right: -2px; bottom: -2px; width: 30px; height: 30px;
+  border-radius: 50%; display: grid; place-items: center; border: 3px solid var(--surface);
+  background: color-mix(in srgb, var(--ring-color, var(--status-present)) 16%, transparent);
+  color: var(--ring-color, var(--status-present));
+  animation: tickPop var(--dur-slow) var(--ease-out); }
+.scan-avatar__badge [data-icon] svg { width: 16px; height: 16px; }
 
 /* Global top progress bar (driven by App.ui.progress / api.js) */
 #app-progress { position: fixed; left: 0; top: 0; height: 3px; width: 100%; z-index: var(--z-progress);
