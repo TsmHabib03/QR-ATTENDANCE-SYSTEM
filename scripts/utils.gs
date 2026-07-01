@@ -68,6 +68,53 @@ function cachedReadAll_(name) {
 function bustCache_(name) {
   delete _memo[name];
   try { CacheService.getScriptCache().remove('sheet:' + name); } catch (e) {}
+  if (name === 'Attendance') {
+    var k = 'Attendance:' + today_();
+    delete _memo[k];
+    try { CacheService.getScriptCache().remove('sheet:' + k); } catch (e) {}
+  }
+}
+
+/**
+ * Cached read of TODAY's Attendance rows only (request memo -> CacheService ->
+ * live read). Attendance as a whole is excluded from CACHEABLE_ because the
+ * full sheet can exceed CacheService's 100KB value limit, but a single day's
+ * rows are small — this is the hot path for scan()'s existing-record lookup
+ * and the Attendance Records page's default ("today") view. Historical dates
+ * are read live via cachedReadAll_ + dstr_ filtering (not hot, no caching).
+ */
+function cachedTodayAttendance_() {
+  var date = today_();
+  var key = 'Attendance:' + date;
+  if (_memo[key]) return _memo[key];
+
+  try {
+    var hit = CacheService.getScriptCache().get('sheet:' + key);
+    if (hit) { var cached = JSON.parse(hit); _memo[key] = cached; return cached; }
+  } catch (e) { /* fall through to live read */ }
+
+  var rows = readAll_('Attendance').filter(function (a) { return dstr_(a.Date) === date; });
+  _memo[key] = rows;
+  try {
+    var s = JSON.stringify(rows);
+    if (s.length < 90000) CacheService.getScriptCache().put('sheet:' + key, s, CACHE_TTL_);
+  } catch (e) { /* too big / quota — skip cross-request cache */ }
+  return rows;
+}
+
+/**
+ * Soft per-session rate limit (CacheService increment+TTL — not atomic across
+ * concurrent requests, so this is an abuse/runaway-loop guard, not a hard
+ * security boundary). Threshold is tunable via Settings without a redeploy.
+ */
+function checkRateLimit_(token) {
+  var limit = Number(Settings_.get('RateLimitPerMinute') || 120);
+  if (!limit) return; // 0/blank disables the limiter
+  var cache = CacheService.getScriptCache();
+  var key = 'rl:' + token;
+  var count = Number(cache.get(key) || 0) + 1;
+  cache.put(key, String(count), 60);
+  if (count > limit) throw new Error('Too many requests — please slow down and try again shortly.');
 }
 
 /** Append an object as a new row, aligned to the header order. */

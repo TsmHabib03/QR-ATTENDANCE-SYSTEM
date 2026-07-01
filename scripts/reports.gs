@@ -20,7 +20,7 @@ var Reports_ = (function () {
       case 'monthly': return lastNDays_(att, 30);
       case 'department':
       case 'daily':
-      default:        return att.filter(function (a) { return String(a.Date) === date; });
+      default:        return att.filter(function (a) { return dstr_(a.Date) === date; });
     }
   }
 

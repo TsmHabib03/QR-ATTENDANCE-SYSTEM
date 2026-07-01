@@ -44,6 +44,7 @@
 
       const rows = await load("");
       const sel = App.ui.$("#a-filter");
+      if (!sel) return; // navigated away while audit.list() was in flight
       [...new Set(rows.map((r) => r.Action))].sort().forEach((a) => sel.appendChild(App.ui.el("option", { value: a }, a)));
       sel.addEventListener("change", (e) => load(e.target.value));
     },

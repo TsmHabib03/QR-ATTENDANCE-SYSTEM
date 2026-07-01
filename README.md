@@ -175,6 +175,22 @@ to `application/json` or add an `Authorization` header, or browsers will block i
 
 ---
 
+## 7b. Backend unit test (optional, dev-only)
+
+`scripts/_test/` has a small Node-only regression test proving the Attendance
+date filter (used by `attendance.gs`'s `list()`/`scan()`/`manual()` and
+`reports.gs`) correctly handles the fact that **Google Sheets silently turns a
+written date string into a real `Date` object** — the filter must use
+`dstr_()` (utils.gs), not a plain `String(a.Date) ===` comparison, or records
+for "today" silently vanish. This is separate from — and doesn't contradict —
+the zero-build-step frontend; it never ships to the browser or Apps Script.
+
+```bash
+node scripts/_test/attendance.dstr.test.js   # no deps, no package.json needed
+```
+
+---
+
 ## 8. Troubleshooting
 
 | Symptom | Fix |
@@ -184,6 +200,7 @@ to `application/json` or add an `Authorization` header, or browsers will block i
 | CORS error in console | You changed the Content-Type or added headers — keep the text/plain contract. |
 | Camera won't start | Needs HTTPS or `localhost` + camera permission. |
 | Changes to backend not reflected | Create a **new deployment version** (or `clasp deploy`). |
+| "Too many requests" error | Hit the soft rate limit (default 120 req/min/session). Raise `RateLimitPerMinute` in the **Settings** sheet, or set it to `0` to disable. |
 
 ---
 

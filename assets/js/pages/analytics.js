@@ -1,11 +1,12 @@
 /* ===== Analytics: rate KPIs + charts + accessible data-table alternative ===== */
 (function () {
-  let charts = [], unsub = null;
+  let charts = [], unsub = null, alive = false;
   const destroy = () => { charts.forEach((c) => c.destroy()); charts = []; };
 
   App.pages.analytics = {
     title: "Analytics", crumb: "Analytics",
     async mount(view) {
+      alive = true;
       destroy();
       view.innerHTML = `
         <div class="page-head"><div><h1>Analytics</h1><p>Rates and trends across recent days.</p></div></div>
@@ -21,14 +22,27 @@
       App.ui.icons(view);
 
       await load();
-      if (!unsub) unsub = App.bus.on("attendance:changed", () => { if (App.ui.$("#a-kpis")) load(); });
+      if (!unsub) unsub = App.bus.on("attendance:changed", () => { if (alive) load(); });
     },
-    onLeave() { destroy(); if (unsub) { unsub(); unsub = null; } },
+    onLeave() {
+      alive = false; // set first: a load() suspended mid-await must see this even if unsub was never assigned
+      destroy();
+      if (unsub) { unsub(); unsub = null; }
+    },
   };
 
   async function load() {
     destroy();
-    const data = await App.api.call("analytics.summary", {}, { fresh: true });
+    const [data] = await Promise.all([
+      App.api.call("analytics.summary", {}, { fresh: true }),
+      window.Chart ? Promise.resolve() : App.loadScript(App.CDN.CHART),
+    ]);
+    // Lazy-loading Chart.js can make this await noticeably longer than the
+    // old eager-script version — if the user navigated away before it
+    // resolved, `alive` was already flipped false by onLeave() (which can
+    // run mid-await, before unsub is even assigned) — bail instead of
+    // rendering into a page that's no longer mounted.
+    if (!alive) return;
     renderKpis(data);
     drawTrend(data.series);
     drawDept(data.series);

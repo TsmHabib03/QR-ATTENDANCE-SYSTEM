@@ -26,6 +26,7 @@ function route_(action, token, payload, e) {
 
     // ---- authenticated actions ----
     var session = Auth_.validate(token); // throws on invalid/expired
+    checkRateLimit_(token); // soft abuse guard — see utils.gs
 
     var handlers = {
       'logout':              function () { return Auth_.logout(token); },
@@ -98,7 +99,7 @@ function setup() {
 
     // Default settings — add only missing keys (never clobber customizations).
     var defaults = { OrgName: 'QR Attendance', Timezone: 'Asia/Manila', GracePeriod: '10',
-                     WorkingDays: 'Mon-Fri', EmailEnabled: 'true', Theme: 'light' };
+                     WorkingDays: 'Mon-Fri', EmailEnabled: 'true', Theme: 'light', RateLimitPerMinute: '120' };
     var have = {};
     readAll_('Settings').forEach(function (r) { have[r.Key] = true; });
     var setSheet = ss.getSheetByName('Settings');

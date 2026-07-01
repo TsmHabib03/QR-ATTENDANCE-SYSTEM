@@ -25,8 +25,8 @@ var Attendance_ = (function () {
       var sched = Schedule_.resolve(member);
       var noSchedule = !sched;
 
-      var existing = cachedReadAll_('Attendance').filter(function (a) {
-        return a.MemberID === member.MemberID && String(a.Date) === date;
+      var existing = cachedTodayAttendance_().filter(function (a) {
+        return a.MemberID === member.MemberID;
       })[0];
 
       // First scan today -> Time In
@@ -83,7 +83,7 @@ var Attendance_ = (function () {
       };
 
       var existing = cachedReadAll_('Attendance').filter(function (a) {
-        return a.MemberID === member.MemberID && String(a.Date) === date;
+        return a.MemberID === member.MemberID && dstr_(a.Date) === date;
       })[0];
 
       var saved;
@@ -103,7 +103,9 @@ var Attendance_ = (function () {
 
   function list(payload) {
     var date = (payload && payload.date) || today_();
-    var rows = cachedReadAll_('Attendance').filter(function (a) { return String(a.Date) === date; });
+    var rows = date === today_()
+      ? cachedTodayAttendance_()
+      : cachedReadAll_('Attendance').filter(function (a) { return dstr_(a.Date) === date; });
     return { rows: rows, total: rows.length, date: date };
   }
 

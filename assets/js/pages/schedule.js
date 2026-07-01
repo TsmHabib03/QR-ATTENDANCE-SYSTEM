@@ -13,9 +13,11 @@
         </div>
         <div id="s-table"><div class="card"><div class="card__body">${App.ui.skeletonRows(6)}</div></div></div>`;
       App.ui.icons(view);
+      const tableHost = App.ui.$("#s-table"); // captured now — safe to use even if the user navigates away below
 
       const { rows } = await App.api.call("schedule.list", {});
-      const mount = App.ui.$("#s-table");
+      if (!document.body.contains(tableHost)) return; // navigated away while loading
+      const mount = tableHost;
       App.ui.dataTable(mount, {
         rows, pageSize: 10,
         searchKeys: ["ScheduleName", "ScopeType", "ScopeValue", "WorkingDays", "Status"],

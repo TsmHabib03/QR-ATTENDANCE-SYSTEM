@@ -17,6 +17,7 @@
               <button class="btn btn--cta" id="scan-start"><span data-icon="camera"></span> Start camera</button>
               <button class="btn" id="scan-stop" hidden><span data-icon="square"></span> Stop</button>
               <button class="btn" id="scan-manual"><span data-icon="clipboard-pen"></span> Manual entry</button>
+              <button class="iconbtn" id="scan-mute" title="${App.sound.isMuted() ? "Unmute" : "Mute"} scan sounds"><span data-icon="${App.sound.isMuted() ? "volume-x" : "volume-2"}"></span></button>
               ${App.isDemo ? `<button class="btn" id="scan-demo"><span data-icon="zap"></span> Simulate scan</button>` : ""}
             </div>
             <p class="muted mt-4" id="scan-hint">Camera needs HTTPS (or localhost) and permission. It stays on between members.</p>
@@ -31,16 +32,34 @@
       App.ui.$("#scan-start").addEventListener("click", startCamera);
       App.ui.$("#scan-stop").addEventListener("click", stopCamera);
       App.ui.$("#scan-manual").addEventListener("click", () => App.manualAttendance && App.manualAttendance());
+      App.ui.$("#scan-mute").addEventListener("click", toggleMute);
       if (App.isDemo) App.ui.$("#scan-demo").addEventListener("click", () => handleCode("M001"));
     },
-    onLeave() { stopCamera(); },
+    onLeave() {
+      stopCamera();
+      clearTimeout(popupTimer);
+      if (popupEl) popupEl.classList.remove("is-visible", "is-leaving");
+    },
   };
+
+  function toggleMute() {
+    const next = !App.sound.isMuted();
+    App.sound.setMuted(next);
+    const btn = App.ui.$("#scan-mute");
+    if (btn) {
+      btn.title = (next ? "Unmute" : "Mute") + " scan sounds";
+      btn.innerHTML = `<span data-icon="${next ? "volume-x" : "volume-2"}"></span>`;
+      App.ui.icons(btn);
+    }
+  }
 
   async function startCamera() {
     if (running) return;
-    if (!window.Html5Qrcode) { App.ui.toast("Scanner library not loaded.", "error"); return; }
+    App.sound.unlock(); // must happen inside a real user gesture (iOS)
     toggleButtons(true);
     try {
+      if (!window.Html5Qrcode) await App.loadScript(App.CDN.HTML5_QRCODE);
+      if (!App.ui.$("#qr-reader")) return; // navigated away while the library was loading
       scanner = scanner || new Html5Qrcode("qr-reader", { experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
       await scanner.start(
         { facingMode: "environment" },
@@ -80,14 +99,57 @@
     try {
       const r = await App.api.call("attendance.scan", { qr: code });
       showResult(r);
+      showScanPopup(r);
+      App.sound.success();
       App.bus.emit("attendance:changed");
       if (navigator.vibrate) navigator.vibrate(60);
     } catch (err) {
       showError(err.message);
+      showScanPopup(null, err.message);
+      App.sound.fail();
       if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
     } finally {
-      setTimeout(() => { busy = false; }, 1300); // cooldown before the next member
+      setTimeout(() => { busy = false; }, 800); // cooldown before the next member
     }
+  }
+
+  /* ---- Transient scan-result popup: one reused node, auto-dismissing,
+     never blocks the camera or the next scan (see plan for rationale). ---- */
+  let popupEl = null, popupTimer = null;
+  function popupNode() {
+    if (popupEl) return popupEl;
+    popupEl = App.ui.el("div", { class: "scan-popup" }, App.ui.el("div", { class: "scan-popup__card" }));
+    document.body.appendChild(popupEl);
+    return popupEl;
+  }
+
+  function showScanPopup(r, errMsg) {
+    const el = popupNode();
+    const card = el.querySelector(".scan-popup__card");
+    if (r) {
+      const name = ((r.member.FirstName || "") + " " + (r.member.LastName || "")).trim();
+      card.className = "scan-popup__card";
+      card.innerHTML = `
+        <div class="scan-tick"><span data-icon="check"></span></div>
+        <div class="avatar-lg">${App.ui.initials(name)}</div>
+        <h2>${App.ui.esc(name)}</h2>
+        <p class="mt-4">${App.ui.statusBadge(r.status)} &nbsp; <strong>${App.ui.esc(r.type)}</strong></p>`;
+    } else {
+      card.className = "scan-popup__card is-fail";
+      card.innerHTML = `
+        <div class="scan-tick"><span data-icon="x"></span></div>
+        <h2>Scan failed</h2>
+        <p class="muted">${App.ui.esc(errMsg || "")}</p>`;
+    }
+    App.ui.icons(card);
+
+    clearTimeout(popupTimer);
+    el.classList.remove("is-leaving");
+    el.classList.add("is-visible");
+    popupTimer = setTimeout(() => {
+      el.classList.add("is-leaving");
+      el.classList.remove("is-visible");
+    }, 1800);
   }
 
   function showResult(r) {

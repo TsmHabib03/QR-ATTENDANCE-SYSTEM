@@ -16,18 +16,20 @@
         </div>
         <div id="m-table">${tableSkeleton()}</div>`;
       App.ui.icons(view);
+      const tableHost = App.ui.$("#m-table"); // captured now — safe to use even if the user navigates away below
 
       // Load members + schedules together (both cached); build a quick lookup.
       const [{ rows }, sched] = await Promise.all([
         App.api.call("members.list", {}),
         App.api.call("schedule.list", {}),
       ]);
+      if (!document.body.contains(tableHost)) return; // navigated away while loading
       schedules = sched.rows || [];
       scheduleMap = {};
       schedules.forEach((s) => (scheduleMap[s.ScheduleID] = s));
       rows.forEach((r) => (r.name = r.FirstName + " " + r.LastName)); // for name-column sorting
 
-      const mount = App.ui.$("#m-table");
+      const mount = tableHost;
       App.ui.dataTable(mount, {
         rows,
         pageSize: 10,
@@ -120,9 +122,9 @@
   // ---- QR code: preview + download (hi-res) + print + regenerate ----
   const qrText = (m) => m.QRCode || m.MemberID;
 
-  function showQr(m) {
+  async function showQr(m) {
     const body = App.ui.el("div", { class: "stack" });
-    body.innerHTML = `<p class="muted">QR encodes the member's code only — never personal data.</p><div class="qr-box" id="qrbox"></div>
+    body.innerHTML = `<p class="muted">QR encodes the member's code only — never personal data.</p><div class="qr-box" id="qrbox">${App.ui.skeletonRows(1)}</div>
       <p class="row" style="justify-content:center"><strong>${App.ui.esc(m.FirstName + " " + m.LastName)}</strong> · ${App.ui.esc(m.MemberID)}</p>`;
     const footer = App.ui.el("div", { class: "row row--end", html: `
       <button class="btn" data-cancel>Close</button>
@@ -133,6 +135,7 @@
     App.ui.icons(modal);
 
     const renderBox = () => { const box = modal.querySelector("#qrbox"); box.innerHTML = ""; new QRCode(box, { text: qrText(m), width: 200, height: 200, correctLevel: QRCode.CorrectLevel.H }); };
+    if (!window.QRCode) await App.loadScript(App.CDN.QRCODEJS);
     renderBox();
 
     footer.querySelector("[data-cancel]").addEventListener("click", close);
@@ -151,7 +154,8 @@
   }
 
   // Render a QR offscreen at high resolution and return a PNG data URL.
-  function qrDataUrl(text, size = 1024) {
+  async function qrDataUrl(text, size = 1024) {
+    if (!window.QRCode) await App.loadScript(App.CDN.QRCODEJS);
     return new Promise((resolve) => {
       const tmp = App.ui.el("div", { style: "position:fixed;left:-9999px;top:-9999px" });
       document.body.appendChild(tmp);

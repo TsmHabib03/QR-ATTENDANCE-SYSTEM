@@ -91,7 +91,7 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; font-weight: 700; letter-spacing:
 .field__error { color: var(--status-absent); font-size: 12px; margin: 6px 0 0; min-height: 1em; }
 
 .input, select.input, textarea.input {
-  width: 100%; font: inherit; font-size: 15px;
+  width: 100%; font: inherit; font-size: 16px; /* >=16px prevents iOS Safari auto-zoom-on-focus */
   padding: 10px 12px; color: var(--text);
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -318,6 +318,18 @@ table.data td.actions { text-align: right; }
 .notice--warn { background: color-mix(in srgb, var(--status-late) 14%, transparent); color: #b45309;
   border-color: color-mix(in srgb, var(--status-late) 35%, transparent); }
 
+/* Transient scan-result popup — reused node, no scrim, never blocks the camera/clicks */
+.scan-popup { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; place-items: center;
+  padding: var(--sp-4); pointer-events: none; }
+.scan-popup__card { pointer-events: auto; width: 100%; max-width: 360px; text-align: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3); padding: var(--sp-6) var(--sp-5);
+  transform-origin: center; opacity: 0; transform: scale(.95);
+  transition: transform 250ms var(--ease-out), opacity 250ms var(--ease-out); }
+.scan-popup.is-visible .scan-popup__card { opacity: 1; transform: scale(1); }
+.scan-popup.is-leaving .scan-popup__card { transition-duration: 150ms; opacity: 0; transform: scale(.95); }
+.scan-popup__card.is-fail .scan-tick { background: color-mix(in srgb, var(--status-absent) 16%, transparent); color: var(--status-absent); }
+
 /* Global top progress bar (driven by App.ui.progress / api.js) */
 #app-progress { position: fixed; left: 0; top: 0; height: 3px; width: 100%; z-index: var(--z-progress);
   transform: scaleX(0); transform-origin: left; opacity: 0;
@@ -327,7 +339,7 @@ table.data td.actions { text-align: right; }
 @keyframes progressGrow { 0% { transform: scaleX(0); } 50% { transform: scaleX(.65); } 100% { transform: scaleX(.92); } }
 
 /* Helpers */
-.row { display: flex; gap: var(--sp-3); align-items: center; }
+.row { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; } /* wrap, don't overflow, on narrow screens */
 .row--end { justify-content: flex-end; }
 .muted { color: var(--text-muted); }
 .mt-4 { margin-top: var(--sp-4); } .mb-4 { margin-bottom: var(--sp-4); }
@@ -348,6 +360,7 @@ table.data td.actions { text-align: right; }
   .topbar__menu { display: inline-flex; }
   /* Larger touch targets + roomier nav rows on phones */
   .nav__link { padding: 13px 14px; }
+  .iconbtn { width: 44px; height: 44px; }
 }
 
 /* =========================================================================

@@ -5,9 +5,11 @@
     async mount(view) {
       view.innerHTML = `<div class="page-head"><div><h1>Settings</h1><p>Organization and system preferences.</p></div></div>
         <div class="card"><div class="card__body">${App.ui.skeletonRows(5)}</div></div>`;
+      const card = view.querySelector(".card"); // captured now — a later view.querySelector could hit a different page's .card
       const { settings } = await App.api.call("settings.get", {}).catch(() => ({ settings: App.settings || {} }));
+      if (!document.body.contains(card)) return; // navigated away while loading
       const s = settings || {};
-      view.querySelector(".card").innerHTML = `<div class="card__body"><form id="set-form">
+      card.innerHTML = `<div class="card__body"><form id="set-form">
         <div class="form-grid">
           ${row("OrgName", "Organization name", s.OrgName)}
           ${row("Timezone", "Timezone", s.Timezone)}

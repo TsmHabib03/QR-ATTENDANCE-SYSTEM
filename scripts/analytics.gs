@@ -8,6 +8,10 @@ var Analytics_ = (function () {
   function countStatus_(rows, s) { return rows.filter(function (r) { return r.Status === s; }).length; }
   function pct_(n, d) { return d ? Math.round((n / d) * 100) : 0; }
 
+  // NOTE: `possible` assumes every member works all `n` days. Orgs whose schedules
+  // have WorkingDays < 7/week will see presentRate/lateRate under-counted here —
+  // a precise fix needs per-member working-day sets (see Schedule_.resolve /
+  // isWorkingDay_ in attendance.gs) and is deferred as a known limitation.
   function rangeStats_(att, memberCount, n) {
     var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - (n - 1));
     var iso = Utilities.formatDate(cutoff, tz_(), 'yyyy-MM-dd');
