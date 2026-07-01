@@ -299,40 +299,11 @@ table.data td.actions { text-align: right; }
 /* Face avatar — bespoke inline-SVG face (App.ui.avatarFace), tinted via --face-color
    set inline per member. Generic (not scoped to #scan-result) so it works identically
    in the popup card, which lives outside that container. */
-.avatar-face {
-  /* Derived, NOT redeclaring --face-color itself (that would break inheritance
-     from .scan-avatar's inline style, which sets --face-color on the ancestor). */
-  --face-hi:   color-mix(in srgb, var(--face-color, var(--color-primary)) 45%, white);
-  --face-deep: color-mix(in srgb, var(--face-color, var(--color-primary)) 70%, black);
-
-  position: relative; isolation: isolate; overflow: hidden;
-  width: 84px; height: 84px; border-radius: 50%;
-  display: grid; place-items: center;
+.avatar-face { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--face-color, var(--color-primary)) 16%, transparent);
   color: var(--face-color, var(--color-primary));
-
-  /* "Orb": light source upper-left, darkening toward lower-right */
-  background: radial-gradient(circle at 30% 26%,
-    var(--face-hi) 0%,
-    var(--face-color, var(--color-primary)) 48%,
-    var(--face-deep) 100%);
-
-  box-shadow:
-    inset -12px -14px 20px -8px color-mix(in srgb, var(--face-color, var(--color-primary)) 55%, black),
-    inset 8px 8px 14px -6px rgba(255, 255, 255, .55),
-    var(--shadow-2);
-
-  margin: 0 auto var(--sp-3); animation: pop var(--dur-base) var(--ease-out);
-}
-/* Restrained glossy highlight — a small blurred glare, not a glassy sheen. */
-.avatar-face::before {
-  content: ""; position: absolute; top: 10%; left: 16%; width: 42%; height: 30%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 75%);
-  filter: blur(2.5px); opacity: .4; mix-blend-mode: soft-light; transform: rotate(-20deg);
-  pointer-events: none;
-}
-.avatar-face svg { position: relative; z-index: 1; width: 46px; height: 46px;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)); }
+  margin: 0 auto var(--sp-3); animation: pop var(--dur-base) var(--ease-out); }
+.avatar-face svg { width: 46px; height: 46px; }
 @keyframes pop { from { opacity: 0; transform: scale(.9); } }
 
 /* QR preview box */

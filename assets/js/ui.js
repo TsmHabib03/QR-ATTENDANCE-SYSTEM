@@ -81,35 +81,25 @@
   ui.initials = (name) =>
     (name || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
-  // ---- Face avatar (scan results / member displays): bespoke flat-icon face ----
-  // Distinct male/female hair silhouette when Gender is known; neutral (no hair) when
-  // it isn't. Drawn entirely in currentColor so the caller tints the wrapping circle
-  // (see .avatar-face / .scan-tick in app.css: color-mix 16% bg + full-color icon).
-  // `seed` (e.g. MemberID) makes the neutral eye-shape deterministic so the same
-  // member never flickers between looks on repeat scans.
+  // ---- Face avatar (scan results / member displays): classic bust silhouette ----
+  // The universal flat "profile vector" icon — round head + shoulders, solid
+  // currentColor fill, no facial features. Female gets one added hair-silhouette
+  // shape behind the head; male/neutral stay a plain head. Drawn entirely in
+  // currentColor so the caller tints the wrapping circle (see .avatar-face in
+  // app.css: color-mix 16% bg + full-color icon).
   ui.avatarFace = (gender, seed) => {
     const g = String(gender || "").trim().toLowerCase();
     const isMale = g === "male", isFemale = g === "female";
     const colorVar = isMale ? "--color-primary" : isFemale ? "--color-cta" : "--text-muted";
 
-    let hash = 0;
-    const s = String(seed || "");
-    for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
-
-    const hair = isMale
-      ? `<path d="M6 22C6 9.85 17.85 1 32 1S58 9.85 58 22" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/>`
-      : isFemale
-      ? `<path d="M4 34C4 14.67 16.75 1 32 1S60 14.67 60 34" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/>`
-      : ""; // neutral/unknown: no gendered hair shape
-
-    const roundEyes = isMale || isFemale || hash % 2 === 0;
-    const eyes = roundEyes
-      ? `<circle cx="23" cy="27" r="3.4" fill="currentColor"/><circle cx="41" cy="27" r="3.4" fill="currentColor"/>`
-      : `<ellipse cx="23" cy="27" rx="4.2" ry="2.6" fill="currentColor"/><ellipse cx="41" cy="27" rx="4.2" ry="2.6" fill="currentColor"/>`;
+    const hair = isFemale
+      ? `<path d="M15 20a17 17 0 0 1 34 0c0 3-1 5-1 5-2-6-8-9-16-9s-14 3-16 9c0 0-1-2-1-5z" fill="currentColor"/>`
+      : "";
 
     const svg = `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      ${hair}${eyes}
-      <path d="M21 39c3.5 5 8 7.5 11 7.5s7.5-2.5 11-7.5" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      ${hair}
+      <circle cx="32" cy="24" r="13" fill="currentColor"/>
+      <path d="M8 58c0-13.25 10.75-22 24-22s24 8.75 24 22" fill="currentColor"/>
     </svg>`;
 
     return { svg, colorVar };
